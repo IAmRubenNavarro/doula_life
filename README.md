@@ -4,8 +4,10 @@
 [![Python](https://img.shields.io/badge/Python-3.13+-3776ab.svg?style=flat&logo=python&logoColor=white)](https://python.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg?style=flat&logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat&logo=supabase&logoColor=white)](https://supabase.com)
+[![Stripe](https://img.shields.io/badge/Stripe-7.0.0-635BFF?style=flat&logo=stripe&logoColor=white)](https://stripe.com)
+[![PayPal](https://img.shields.io/badge/PayPal-1.13.3-0070BA?style=flat&logo=paypal&logoColor=white)](https://paypal.com)
 
-A robust, production-ready backend API for the Doula Life consulting and training platform. Built with **FastAPI**, **PostgreSQL**, and **Supabase** with comprehensive error handling, structured logging, and async support.
+A robust, production-ready backend API for the Doula Life consulting and training platform. Built with **FastAPI**, **PostgreSQL**, **Supabase**, **Stripe**, and **PayPal** with comprehensive error handling, structured logging, and dual payment provider support.
 
 ---
 
@@ -16,6 +18,7 @@ A robust, production-ready backend API for the Doula Life consulting and trainin
 - **PostgreSQL** database via Supabase with connection pooling
 - **Async SQLAlchemy** for efficient database operations
 - **Pydantic** schemas for data validation and serialization
+- **Dual Payment Processing** with Stripe and PayPal integration
 
 ### 🛡️ **Enterprise-Grade Reliability**
 - **Comprehensive Exception Handling** - Nothing fails silently
@@ -32,10 +35,21 @@ A robust, production-ready backend API for the Doula Life consulting and trainin
 - **Extensive Error Context** for debugging and monitoring
 
 ### 🚀 **Production Ready**
-- **Database Connection Resilience** with retry policies (configurable)
+- **Database Connection Resilience** with automatic retry policies for transient failures
+- **Smart Retry Logic** - Standard (3 attempts) and Critical (5 attempts) operation handling
 - **Request/Response Logging** for audit trails
 - **Error ID Tracking** for support and debugging
 - **Startup/Shutdown Event Handling** for graceful lifecycle management
+
+### 💳 **Payment Processing**
+- **Dual Provider Support** - Stripe and PayPal integration
+- **Unified Payment Interface** - Single endpoint for both providers
+- **Stripe Payment Intents** for card and digital wallet payments
+- **PayPal Orders** for PayPal account and credit card payments
+- **Webhook Signature Verification** for payment status updates
+- **Comprehensive Error Handling** for all payment scenarios
+- **Metadata Tracking** for linking payments to services/appointments
+- **PCI Compliance** through provider secure infrastructure
 
 ---
 
@@ -45,6 +59,8 @@ A robust, production-ready backend API for the Doula Life consulting and trainin
 
 - **Python 3.13+** (3.11+ supported)
 - **Supabase Project** with PostgreSQL database
+- **Stripe Account** for payment processing ([Get started](https://dashboard.stripe.com/register))
+- **PayPal Developer Account** for PayPal payments ([Get started](https://developer.paypal.com/))
 - **Git** for version control
 
 ### Installation
@@ -69,6 +85,7 @@ source venv/bin/activate
 3. **Install dependencies**
 ```bash
 pip install -r requirements.txt
+# Includes: FastAPI, SQLAlchemy, Stripe, and all other dependencies
 ```
 
 4. **Environment Configuration**
@@ -82,6 +99,17 @@ DATABASE_URL=postgresql+asyncpg://postgres:[password]@[project].supabase.co:5432
 SECRET_KEY=your-secret-key-here
 SUPABASE_URL=https://[project].supabase.co
 SUPABASE_ANON_KEY=your-anon-key
+
+# Stripe Configuration (Required for Stripe payments):
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# PayPal Configuration (Required for PayPal payments):
+PAYPAL_CLIENT_ID=your_paypal_client_id
+PAYPAL_CLIENT_SECRET=your_paypal_client_secret
+PAYPAL_MODE=sandbox
+PAYPAL_WEBHOOK_ID=your_paypal_webhook_id
 ```
 
 5. **Run the application**
@@ -116,7 +144,31 @@ open http://localhost:8000/docs
 - `GET /users/{user_id}` - Get user by ID
 - `GET /users/` - List users (paginated)
 
-*More endpoints coming soon...*
+### 💳 **Payment Processing**
+
+#### **Unified Payment Interface**
+- `POST /payments/create-payment` - Create payment with any provider
+- `GET /payments/` - List payment records (paginated)
+- `GET /payments/{payment_id}` - Get payment by ID
+- `PUT /payments/{payment_id}` - Update payment record
+
+#### **Stripe Specific**
+- `POST /payments/create-payment-intent` - Create Stripe payment intent
+- `POST /payments/webhook` - Handle Stripe webhook events
+
+#### **PayPal Specific**
+- `POST /payments/paypal/create-order` - Create PayPal order
+- `POST /payments/paypal/capture-payment/{payment_id}` - Capture PayPal payment
+- `GET /payments/paypal/payment/{payment_id}` - Get PayPal payment details
+
+### 📅 **Services & Appointments**
+- `GET /services/` - List available services
+- `POST /appointments/` - Book new appointment
+- `GET /appointments/` - List user appointments
+
+### 🎓 **Training Management**
+- `GET /trainings/` - List available training programs
+- `POST /training_enrollments/` - Enroll in training program
 
 ---
 
@@ -164,6 +216,26 @@ CREATE TABLE appointments (
 );
 ```
 
+### 💳 **Payments**
+```sql
+CREATE TABLE payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  amount NUMERIC NOT NULL,
+  payment_method TEXT NOT NULL,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed')),
+  stripe_payment_intent_id TEXT UNIQUE,
+  stripe_customer_id TEXT,
+  paypal_order_id TEXT UNIQUE,
+  paypal_payment_id TEXT,
+  paypal_payer_id TEXT,
+  service_id UUID REFERENCES services(id),
+  appointment_id UUID REFERENCES appointments(id),
+  training_id UUID REFERENCES training(id),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
 *See `database/schema.sql` for complete schema*
 
 ---
@@ -178,6 +250,13 @@ CREATE TABLE appointments (
 | `SECRET_KEY` | JWT signing key | ✅ | - |
 | `SUPABASE_URL` | Supabase project URL | ✅ | - |
 | `SUPABASE_ANON_KEY` | Supabase anonymous key | ✅ | - |
+| `STRIPE_SECRET_KEY` | Stripe secret key for server-side operations | ⚠️ | - |
+| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key for client-side | ⚠️ | - |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook endpoint secret | ⚠️ | - |
+| `PAYPAL_CLIENT_ID` | PayPal application client ID | ⚠️ | - |
+| `PAYPAL_CLIENT_SECRET` | PayPal application client secret | ⚠️ | - |
+| `PAYPAL_MODE` | PayPal environment (sandbox/live) | ❌ | `sandbox` |
+| `PAYPAL_WEBHOOK_ID` | PayPal webhook ID for verification | ⚠️ | - |
 | `ENVIRONMENT` | Deployment environment | ❌ | `development` |
 | `DEBUG` | Enable debug mode | ❌ | `True` |
 | `OPENAI_API_KEY` | OpenAI API key (future use) | ❌ | - |
@@ -193,6 +272,17 @@ SECRET_KEY=your-super-secret-key-change-in-production
 # Supabase
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
+
+# Stripe Payment Processing
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# PayPal Payment Processing
+PAYPAL_CLIENT_ID=your_paypal_client_id
+PAYPAL_CLIENT_SECRET=your_paypal_client_secret
+PAYPAL_MODE=sandbox
+PAYPAL_WEBHOOK_ID=your_paypal_webhook_id
 
 # Environment
 ENVIRONMENT=development
@@ -223,6 +313,29 @@ Every error includes:
 - **Request Context** (method, URL, headers)
 - **User Context** (when available)
 - **Timestamp** and **Severity Level**
+
+### Database Retry Policies
+Automatic retry logic protects against transient database failures:
+
+**Standard Retry Policy** (`@db_retry`):
+- **3 attempts** total (1 initial + 2 retries)
+- **Exponential backoff**: 1s, 2s, 4s (max 10s)
+- Applied to: Read operations, queries, non-critical updates
+
+**Critical Retry Policy** (`@db_retry_critical`):
+- **5 attempts** total (1 initial + 4 retries)  
+- **Aggressive backoff**: 0.5s, 1s, 2s, 4s, 8s, 16s (max 30s)
+- Applied to: User creation, payment processing, appointment booking
+
+**Smart Exception Handling**:
+- Only retries connection/timeout errors (not data validation errors)
+- Comprehensive logging of retry attempts for monitoring
+- Automatic rollback on failure to maintain data integrity
+
+**Active Protection**:
+- ✅ User management operations (`app/crud/user.py`)
+- ✅ Payment processing operations (`app/crud/payment.py`)
+- ✅ Appointment management operations (`app/crud/appointment.py`)
 
 ---
 
@@ -282,6 +395,182 @@ mypy app/
 # Lint code
 flake8 app/
 ```
+
+---
+
+## 💳 Stripe Payment Integration
+
+### Setup Guide
+
+1. **Create Stripe Account**
+   - Sign up at [https://dashboard.stripe.com/register](https://dashboard.stripe.com/register)
+   - Complete account verification for live payments
+
+2. **Get API Keys**
+   ```bash
+   # Navigate to: Developers → API Keys in Stripe Dashboard
+   # Copy your keys to .env file:
+   STRIPE_SECRET_KEY=sk_test_...        # For server-side operations
+   STRIPE_PUBLISHABLE_KEY=pk_test_...   # For client-side integration
+   ```
+
+3. **Configure Webhooks**
+   ```bash
+   # In Stripe Dashboard: Developers → Webhooks
+   # Create endpoint: https://yourdomain.com/payments/webhook
+   # Select events: payment_intent.succeeded, payment_intent.payment_failed
+   # Copy webhook secret to .env:
+   STRIPE_WEBHOOK_SECRET=whsec_...
+   ```
+
+### Payment Flow
+
+```python
+# Example: Create payment intent
+import requests
+
+response = requests.post("http://localhost:8000/payments/create-payment-intent", 
+    json={
+        "amount": 2000,  # $20.00 in cents
+        "currency": "usd",
+        "user_id": "user-uuid",
+        "service_id": "service-uuid"
+    }
+)
+
+payment_intent = response.json()
+# Use payment_intent["client_secret"] on frontend with Stripe.js
+```
+
+### Test Integration
+
+```bash
+# Test Stripe configuration
+python test_stripe_simple.py
+
+# Test API endpoints
+curl -X POST http://localhost:8000/payments/create-payment-intent \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 2000, "currency": "usd"}'
+```
+
+### Standalone Payment API
+
+For testing without database dependencies:
+```bash
+# Run standalone Stripe API
+python stripe_app.py
+# or
+uvicorn stripe_app:app --reload --port 8001
+
+# Test at: http://localhost:8001/docs
+```
+
+### Security Features
+
+- ✅ **Webhook signature verification** prevents unauthorized requests
+- ✅ **Amount validation** prevents invalid payment amounts
+- ✅ **Comprehensive error handling** for all Stripe scenarios
+- ✅ **Metadata tracking** links payments to business entities
+- ✅ **PCI compliance** through Stripe's secure infrastructure
+
+---
+
+## 💰 PayPal Payment Integration
+
+### Setup Guide
+
+1. **Create PayPal Developer Account**
+   - Sign up at [https://developer.paypal.com/](https://developer.paypal.com/)
+   - Create a new application in the PayPal Developer Dashboard
+
+2. **Get API Credentials**
+   ```bash
+   # Navigate to: My Apps & Credentials in PayPal Developer Dashboard
+   # Copy your credentials to .env file:
+   PAYPAL_CLIENT_ID=your_paypal_client_id
+   PAYPAL_CLIENT_SECRET=your_paypal_client_secret
+   PAYPAL_MODE=sandbox  # or 'live' for production
+   ```
+
+3. **Configure Webhooks (Optional)**
+   ```bash
+   # In PayPal Developer Dashboard: Webhooks
+   # Create webhook: https://yourdomain.com/payments/paypal/webhook
+   # Select events: PAYMENT.SALE.COMPLETED, PAYMENT.SALE.DENIED
+   # Copy webhook ID to .env:
+   PAYPAL_WEBHOOK_ID=your_paypal_webhook_id
+   ```
+
+### Payment Flow
+
+```python
+# Example: Create unified payment (PayPal)
+import requests
+
+response = requests.post("http://localhost:8000/payments/create-payment", 
+    json={
+        "amount": 20.00,  # $20.00 in dollars
+        "payment_provider": "paypal",
+        "user_id": "user-uuid",
+        "service_id": "service-uuid",
+        "return_url": "https://yoursite.com/success",
+        "cancel_url": "https://yoursite.com/cancel"
+    }
+)
+
+payment_data = response.json()
+# Redirect user to: payment_data["approval_url"]
+# After approval, capture with payment_id and payer_id
+```
+
+### Unified Payment Interface
+
+The unified endpoint supports both Stripe and PayPal:
+
+```python
+# Stripe Payment
+{
+    "amount": 20.00,
+    "payment_provider": "stripe",
+    "user_id": "123"
+    # No URLs needed - returns client_secret for frontend
+}
+
+# PayPal Payment  
+{
+    "amount": 20.00,
+    "payment_provider": "paypal", 
+    "user_id": "123",
+    "return_url": "https://yoursite.com/success",
+    "cancel_url": "https://yoursite.com/cancel"
+    # Returns approval_url for redirect
+}
+```
+
+### Test Integration
+
+```bash
+# Test unified payment API
+python unified_payments_app.py
+# or
+uvicorn unified_payments_app:app --reload --port 8002
+
+# Test both providers
+curl -X POST http://localhost:8002/payments/test
+
+# Test at: http://localhost:8002/docs
+```
+
+### Key Differences: Stripe vs PayPal
+
+| Feature | Stripe | PayPal |
+|---------|---------|---------|
+| **Amount Format** | Cents (2000 = $20.00) | Dollars (20.00 = $20.00) |
+| **Client Integration** | Client-side with client_secret | Redirect to approval_url |
+| **Payment Flow** | Single-step confirmation | Two-step (create → capture) |
+| **Supported Methods** | Cards, Apple Pay, Google Pay | PayPal accounts, cards |
+| **Webhook Events** | payment_intent.* | PAYMENT.SALE.* |
 
 ---
 

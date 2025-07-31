@@ -9,9 +9,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.models.user import User
 from app.schemas.user import UserCreate
 from app.core.exceptions import log_exception, DatabaseError, ValidationError
-# from app.core.retry_policies import db_retry, db_retry_critical  # Temporarily disabled
+from app.core.retry_policies import db_retry, db_retry_critical
 
-# @db_retry_critical  # Temporarily disabled
+@db_retry_critical
 async def create_user(db: AsyncSession, user: UserCreate) -> User:
     """Create a new user in the database with full error handling
     
@@ -68,7 +68,7 @@ async def create_user(db: AsyncSession, user: UserCreate) -> User:
         log_exception(e, "create_user unexpected error")
         raise DatabaseError(f"Unexpected error creating user: {str(e)}", e)
 
-# @db_retry  # Temporarily disabled
+@db_retry
 async def get_user_by_email(db: AsyncSession, email: str):
     """Find a user by their email address with robust error handling
     
@@ -111,7 +111,7 @@ async def get_user_by_email(db: AsyncSession, email: str):
         log_exception(e, f"get_user_by_email unexpected error for email: {email}")
         raise DatabaseError(f"Unexpected error finding user by email: {str(e)}", e)
 
-# @db_retry  # Temporarily disabled
+@db_retry
 async def get_user_by_id(db: AsyncSession, user_id: str):
     """Find a user by their unique ID with comprehensive error handling
     
@@ -154,7 +154,7 @@ async def get_user_by_id(db: AsyncSession, user_id: str):
         log_exception(e, f"get_user_by_id unexpected error for ID: {user_id}")
         raise DatabaseError(f"Unexpected error finding user by ID: {str(e)}", e)
 
-# @db_retry  # Temporarily disabled
+@db_retry
 async def get_users(db: AsyncSession, skip: int = 0, limit: int = 10):
     """Get a paginated list of users with safe parameter validation
     

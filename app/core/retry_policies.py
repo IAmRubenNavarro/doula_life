@@ -1,5 +1,13 @@
 # Retry policies for database operations
 # Handles transient failures and connection issues with configurable retry strategies
+#
+# ACTIVE: Re-enabled and extended retry logic for production resilience
+# - User operations: @db_retry and @db_retry_critical decorators active
+# - Payment operations: Full retry protection on all CRUD operations  
+# - Appointment operations: Critical operations protected with aggressive retry
+#
+# This provides automatic recovery from temporary database connection issues,
+# network timeouts, and connection pool exhaustion scenarios.
 
 import logging
 from tenacity import (

@@ -22,6 +22,17 @@ class Settings(BaseModel):
     # OpenAI (if using)
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
     
+    # Stripe
+    stripe_secret_key: Optional[str] = os.getenv("STRIPE_SECRET_KEY")
+    stripe_publishable_key: Optional[str] = os.getenv("STRIPE_PUBLISHABLE_KEY")
+    stripe_webhook_secret: Optional[str] = os.getenv("STRIPE_WEBHOOK_SECRET")
+    
+    # PayPal
+    paypal_client_id: Optional[str] = os.getenv("PAYPAL_CLIENT_ID")
+    paypal_client_secret: Optional[str] = os.getenv("PAYPAL_CLIENT_SECRET")
+    paypal_mode: str = os.getenv("PAYPAL_MODE", "sandbox")  # sandbox or live
+    paypal_webhook_id: Optional[str] = os.getenv("PAYPAL_WEBHOOK_ID")
+    
     # Environment
     environment: str = os.getenv("ENVIRONMENT", "development")
     debug: bool = os.getenv("DEBUG", "True").lower() == "true"

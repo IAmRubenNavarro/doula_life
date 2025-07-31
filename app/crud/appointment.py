@@ -4,7 +4,9 @@ from uuid import UUID
 
 from app.models.appointment import Appointment
 from app.schemas.appointment import AppointmentCreate, AppointmentUpdate
+from app.core.retry_policies import db_retry, db_retry_critical
 
+@db_retry_critical
 async def create_appointment(db: AsyncSession, appointment: AppointmentCreate) -> Appointment:
     appointment = Appointment(**appointment.model_dump())
     db.add(appointment)
@@ -20,6 +22,7 @@ async def list_appointments(db: AsyncSession) -> list[Appointment]:
     result = await db.execute(select(Appointment))
     return result.scalars().all()
 
+@db_retry_critical
 async def update_appointment(db: AsyncSession, appointment_id: UUID, appointment_data: AppointmentUpdate) -> Appointment:
     result = await db.execute(select(Appointment).where(Appointment.id == appointment_id))
     appointment = result.scalar_one_or_none()
